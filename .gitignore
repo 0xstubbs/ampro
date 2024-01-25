@@ -35,3 +35,5 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+*/target/debug/
+ampro/target/CACHEDIR.TAG
