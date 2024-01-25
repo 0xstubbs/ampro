@@ -30,6 +30,14 @@ pub struct ADFRAWD {
     pub amendment: String,
     #[serde(rename = "drs:adfrawdMake")]
     pub make: Vec<String>,
+    #[serde(rename = "drs:adfrawdModel")]
+    pub model: Vec<String>,
+    #[serde(rename = "drs:adfrawdProductType")] 
+    pub product_type: Vec<String>,
+    #[serde(rename = "drs:adfrawdProductSubType")]
+    pub product_sub_type: Vec<String>,
+    #[serde(rename = "drs:adfrawdSubject")]
+    pub subject: String,
 }
 // #[derive(Serialize, Deserialize, Debug)]
 // pub struct ApiSummary {
