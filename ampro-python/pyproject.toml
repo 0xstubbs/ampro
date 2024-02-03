@@ -11,8 +11,22 @@ requests = "^2.31.0"
 python-dotenv = "^1.0.0"
 notebook = "^7.0.6"
 polars = "^0.20.4"
+ruff = "^0.2.0"
 
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.ruff.lint]
+extend-select = [
+  "UP", # pyupgrade
+  "D",  # pydocstyle
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
+[tool.ruff.format]
+quote-style = 'single'
+docstring-code-format = true
