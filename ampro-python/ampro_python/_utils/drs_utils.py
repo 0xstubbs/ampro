@@ -1,3 +1,4 @@
+from datetime import datetime
 import time
 import os
 import json
@@ -17,7 +18,22 @@ class DRSUtils:
         logger.info("Instantiating DRSUtils")
 
         self.drs_api_key = os.getenv("DRS_API_KEY")
+        if self.drs_api_key is None:
+            logger.error(
+                "API key was not found in environment variables. Please input DRS API key."
+            )
+            self.drs_api_key = input("Enter DRS API Key: ")
+            print("DRS API Key: {self.drs_api_key}")
+        else:
+            logger.info(
+                "DRS Key found in environment variable and loaded successfully."
+            )
+
         self.base_url = os.getenv("DRS_BASE_URL")
+        if self.base_url is None:
+            logger.error(
+                "DRS_BASE_URL not found in environment variable. Make sure you have a .env file."
+            )
         self.date_format = "%y-%m-%dT%H:%M:%S.%fffZ"
         self.offset = 0
         self.has_more_items = True
@@ -31,29 +47,49 @@ class DRSUtils:
         """
         This function checks if there are documents remaining to be collected.
         """
-        offset = docs_summary["offset"]
-        count = docs_summary["count"]
-
-        docs_remaining = docs_summary["totalItems"] - (offset + count)
 
         if docs_summary["hasMoreItems"]:
             logger.info("There are {docs_remaining} documents remaining...")
             self.offset = docs_summary["offset"] + docs_summary["count"] + 1
         else:
             logger.info("There are no more docs to collect. Exiting...")
-            # self.has_more_items = False
             self.paginate = False
 
     def _get_endpoint(self) -> str:
-        if self.doc_type.lower() == "ad" or self.doc_type.lower() == "adfrawd":
-            return "ADFRAWD"
-        elif self.doc_type.lower() == "ac":
-            return "AC"
-        elif self.doc_type.lower() == "ead":
-            return "ADFREAD"
+        endpoint_mapping = {
+            # Airworthiness Directives Mapping
+            "ad": "ADFRAWD",
+            "adfrawd": "ADFRAWD",
+            "ads": "ADFRAWD",
+            "airworthiness directives": "ADFRAWD",
+            "airworthiness directive": "ADFRAWD",
+            # Advisory Circular Mappings
+            "ac": "AC",
+            "advisory circular": "AC",
+            "acs": "AC",
+            "advisory circulars": "AC",
+            "ead": "ADFREAD",
+        }
+
+        # Normalize the doc_type to correct for upper or lowercase entries
+        normalized_doc_type = self.doc_type.lower()
+
+        # Try to get the mapping if invalid enpoint was entered prompt the user to input a new endpoint and give them valid options
+        endpoint = endpoint_mapping.get(normalized_doc_type)
+        if endpoint is None:
+            print(
+                f"{normalized_doc_type} is not a valid document. Please use one of the following:\n\tAD\tAirworthiness Directives\n\tAC\tAdvisory Circular"
+            )
+            endpoint = endpoint_mapping.get(input('Enter "AD" or "AC": ').lower(), "ad")
+            self.doc_type = endpoint
+            logger.info(
+                f"Endpoint corrected to: {endpoint}self.doc_type updated to: {self.doc_type}"
+            )
+            logger.info(f"self.doc_type updated to: {self.doc_type}")
         else:
-            logger.error(f"Invalid document type: {self.doc_type}")
-            raise ValueError(f"Invalid document type: {self.doc_type}")
+            logger.info(f"Endpoint is: {endpoint}")
+
+        return endpoint
 
     def _get_summary_from_response(self, response) -> dict:
         """
@@ -69,10 +105,7 @@ class DRSUtils:
             if summary is None:
                 raise ValueError("Response does not contain 'summary' key")
             else:
-                #                logger.info(f"Returning summary: {summary}\n{summary.items()}")
                 self.summary = summary
-                # return summary
-                # return {"summary": summary}
         except json.JSONDecodeError:
             logger.error(f"JSON decoding failed for {response}")
             summary = {"Error": "Invalid JSON response"}
@@ -118,14 +151,10 @@ class DRSUtils:
         request_url = f"{self.base_url}{endpoint}"
 
         logger.info("Calling API...")
-        # logger.info(f"Request URL: {request_url}")
         response = requests.get(request_url, headers=headers, params=payload)
         logger.info(
             f"Response URL: {response.url}\nResponse Status: {response.status_code}"
         )
-        # logger.info(
-        #    f"Response URL: {response.url}\nResponse Headers: {response.headers}\nResponse Status: {response.status_code}"
-        # )
         return response
 
     def get_docs(
@@ -172,20 +201,13 @@ class DRSUtils:
         while self.paginate is True:
             logger.info(f"Pagination Loop #{i}")
             self.paginate = paginate
-            # logger.info(f"\n\nPaginate: {self.paginate}\n\n")
 
             response = self._call_drs()
 
             if response.ok:
                 self._get_summary_from_response(response)
-                #    logger.info(f"Summary: {self.summary}")
                 self._get_documents_from_response(response)
                 logger.info(f"Documents: {self.documents[0]['drs:documentNumber']}")
-                # summary = self._get_summary_from_response(response)
-                # documents = self._get_documents_from_response(response)
-                # for k, v in summary.items():
-                #    print(f"{k}: {v}")
-                # print(summary.keys())
 
                 logger.info(f"{self.summary['hasMoreItems']}")
                 if not self.summary["hasMoreItems"]:
@@ -202,6 +224,12 @@ class DRSUtils:
                 logging.error(f"Response Status Code: {response.status_code}")
                 self.paginate = False
                 logging.info(f"Setting paginate to False...\nPaginate: {self.paginate}")
+
+        logger.info("Saving ADs to a JSON file for future processing...")
+        with open(
+            f"{datetime.now().strftime('%Y%m%d')}_{self.doc_type}_raw_data.json", "w"
+        ) as f:
+            json.dump(self.list_of_docs, f)
 
 
 # This part only runs when drs_utils.py is executed directly
