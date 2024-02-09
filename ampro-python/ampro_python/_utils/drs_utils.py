@@ -1,3 +1,4 @@
+import time
 import os
 import json
 import requests
@@ -23,6 +24,8 @@ class DRSUtils:
         self.doc_type = "AD"
         self.list_of_docs = []
         self.paginate = True
+        self.documents = dict
+        self.summary = dict
 
     def _paginate_docs(self, docs_summary: dict) -> None:
         """
@@ -65,7 +68,11 @@ class DRSUtils:
             summary = response.json().get("summary")
             if summary is None:
                 raise ValueError("Response does not contain 'summary' key")
-            return {"summary": summary}
+            else:
+                #                logger.info(f"Returning summary: {summary}\n{summary.items()}")
+                self.summary = summary
+                # return summary
+                # return {"summary": summary}
         except json.JSONDecodeError:
             logger.error(f"JSON decoding failed for {response}")
             summary = {"Error": "Invalid JSON response"}
@@ -76,7 +83,7 @@ class DRSUtils:
             logger.error(f"Request error: {e}")
             summary = {"Error": "Request error"}
 
-        return summary
+        # return summary
 
     def _get_documents_from_response(self, response):
         """
@@ -86,6 +93,9 @@ class DRSUtils:
         if response.ok:
             documents = response.json().get("documents")
             self.list_of_docs.extend(documents)
+            logger.info(f"# of Documents: {len(self.list_of_docs)}")
+            self.documents = documents
+            return documents
         else:
             logging.error(f"Response Status Code: {response.status_code}")
 
@@ -93,21 +103,29 @@ class DRSUtils:
         logger.info(f"\n{'*'*50}\n_call_drs")
 
         endpoint = self._get_endpoint()
+
         headers = {
             "x-api-key": self.drs_api_key,
             "USER_AGENT": "curl/7.68.0",
         }
-        payload = {
-            "offset": self.offset,
-            "docLastModifiedDate": self.doc_last_modified,
-        }
+        if self.doc_last_modified == "":
+            payload = {"offset": self.offset}
+        else:
+            payload = {
+                "offset": self.offset,
+                "docLastModifiedDate": self.doc_last_modified,
+            }
         request_url = f"{self.base_url}{endpoint}"
 
         logger.info("Calling API...")
+        # logger.info(f"Request URL: {request_url}")
         response = requests.get(request_url, headers=headers, params=payload)
         logger.info(
-            f"Response URL: {response.url}\nResponse Headers: {response.headers}\nResponse Status: {response.status_code}"
+            f"Response URL: {response.url}\nResponse Status: {response.status_code}"
         )
+        # logger.info(
+        #    f"Response URL: {response.url}\nResponse Headers: {response.headers}\nResponse Status: {response.status_code}"
+        # )
         return response
 
     def get_docs(
@@ -115,7 +133,7 @@ class DRSUtils:
         doc_type: str = "AD",
         offset: int = 0,
         paginate: bool = True,
-        doc_last_modified: str = None,
+        doc_last_modified: str = "",
     ) -> dict:
         """
         This function collects all documents of a specified type.
@@ -133,6 +151,7 @@ class DRSUtils:
         logger.info(
             f"****\nget_docs\n\nDocument: {doc_type}\nOffset: {offset}\n\nLast Modified Date Filter: {doc_last_modified}\nPaginate: {paginate}"
         )
+        # logger.info(f"\n{'*'*50}\nget_docs\nDocument Type: {doc_type}\nOffset: {offset}\nPaginate: {paginate}")
 
         self.offset = offset
         self.doc_type = doc_type
@@ -143,21 +162,42 @@ class DRSUtils:
         #     f"Calling `get_docs` with the following params: \ndoc_type: {self.doc_type}\noffset: {self.offset}"
         # )
 
-        while True:
+        logger.info(
+            f"\n{'*'*50}\nget_docs\nDocument Type: {doc_type}\nOffset: {offset}\nPaginate: {paginate}"
+        )
+        logger.info("Entering pagination loop...")
+        i = 0
+        increment = 750
+
+        while self.paginate is True:
+            logger.info(f"Pagination Loop #{i}")
             self.paginate = paginate
-            logger.info(f"\n\nPaginate: {self.paginate}\n\n")
+            # logger.info(f"\n\nPaginate: {self.paginate}\n\n")
 
             response = self._call_drs()
 
             if response.ok:
-                summary = self._get_summary_from_response(response)
+                self._get_summary_from_response(response)
+                #    logger.info(f"Summary: {self.summary}")
                 self._get_documents_from_response(response)
+                logger.info(f"Documents: {self.documents[0]['drs:documentNumber']}")
+                # summary = self._get_summary_from_response(response)
+                # documents = self._get_documents_from_response(response)
+                # for k, v in summary.items():
+                #    print(f"{k}: {v}")
+                # print(summary.keys())
 
-                if not summary.get("hasMoreItems"):
+                logger.info(f"{self.summary['hasMoreItems']}")
+                if not self.summary["hasMoreItems"]:
                     self.paginate = False
                     logger.info(
                         "There are no more pages left. Setting pagination = False"
                     )
+                else:
+                    self.offset = self.offset + increment
+                    logger.info(f"New offset: {self.offset}")
+
+                    i += 1
             else:
                 logging.error(f"Response Status Code: {response.status_code}")
                 self.paginate = False
@@ -166,8 +206,15 @@ class DRSUtils:
 
 # This part only runs when drs_utils.py is executed directly
 if __name__ == "__main__":
+    logger.info("Calling __main__")
+    start_time = time.time()
     # Testing code
     drs = DRSUtils()
     # Call some methods of DRSUtils for testing
     drs.get_docs("AD")
-    help(drs.get_docs)
+    end_time = time.time()
+
+    total_time = end_time - start_time
+
+    print(f"Total Run Time: {total_time} seconds")
+#    help(drs.get_docs)
