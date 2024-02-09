@@ -229,7 +229,11 @@ class DRSUtils:
         with open(
             f"{datetime.now().strftime('%Y%m%d')}_{self.doc_type}_raw_data.json", "w"
         ) as f:
-            json.dump(self.list_of_docs, f)
+            for doc in self.list_of_docs:
+                json_string = json.dumps(
+                    doc, indent=4, separators=(",", ":"), sort_keys=True
+                )
+                f.write(json_string + "\n")
 
 
 # This part only runs when drs_utils.py is executed directly
