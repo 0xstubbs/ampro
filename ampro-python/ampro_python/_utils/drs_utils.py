@@ -12,36 +12,40 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+# Set the DRS_API_KEY as a variable that in the module rather than putting it in the class since it doesn't ever change.
+
+DRS_API_KEY = os.getenv("DRS_API_KEY")
+if DRS_API_KEY is None:
+    logger.error("No DRS_API_KEY found in .env file. Please input DRS_API_KEY.")
+    DRS_API_KEY = input("Enter DRS_API_KEY: ")
+else:
+    logger.info("DRS_API_KEY found and loaded successfully.")
+
+# Set the BASE_URL from the .env or .config file.
+
+BASE_URL = os.getenv("DRS_BASE_URL")
+if BASE_URL is None:
+    logger.error(
+        "DRS_BASE_URL not found in environment variable. Make sure you have a .env file."
+    )
+    BASE_URL = input("Enter the BASE_URL: ")
+else:
+    logger.info("BASE_URL found and loaded successfully.")
+
+# Set any other variables as necessary
+DATE_FORMAT = "%y-%m-%dT%H:%M:%S.%fffZ"
+
 
 class DRSUtils:
     def __init__(self):
         logger.info("Instantiating DRSUtils")
-
-        self.drs_api_key = os.getenv("DRS_API_KEY")
-        if self.drs_api_key is None:
-            logger.error(
-                "API key was not found in environment variables. Please input DRS API key."
-            )
-            self.drs_api_key = input("Enter DRS API Key: ")
-            print("DRS API Key: {self.drs_api_key}")
-        else:
-            logger.info(
-                "DRS Key found in environment variable and loaded successfully."
-            )
-
-        self.base_url = os.getenv("DRS_BASE_URL")
-        if self.base_url is None:
-            logger.error(
-                "DRS_BASE_URL not found in environment variable. Make sure you have a .env file."
-            )
-        self.date_format = "%y-%m-%dT%H:%M:%S.%fffZ"
         self.offset = 0
         self.has_more_items = True
         self.doc_type = "AD"
         self.list_of_docs = []
         self.paginate = True
-        self.documents = dict
-        self.summary = dict
+        self.documents = {}
+        self.summary = {}
 
     def _paginate_docs(self, docs_summary: dict) -> None:
         """
@@ -49,7 +53,7 @@ class DRSUtils:
         """
 
         if docs_summary["hasMoreItems"]:
-            logger.info("There are {docs_remaining} documents remaining...")
+            logger.info(f"There are {docs_summary[""]} documents remaining...")
             self.offset = docs_summary["offset"] + docs_summary["count"] + 1
         else:
             logger.info("There are no more docs to collect. Exiting...")
