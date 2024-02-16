@@ -5,6 +5,7 @@ import json
 import requests
 import logging
 from dotenv import load_dotenv
+import polars as pl
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -53,7 +54,9 @@ class DRSUtils:
         """
 
         if docs_summary["hasMoreItems"]:
-            logger.info(f"There are {docs_summary[""]} documents remaining...")
+            logger.info(
+                f"There are {docs_summary['totalItems']} documents remaining..."
+            )
             self.offset = docs_summary["offset"] + docs_summary["count"] + 1
         else:
             logger.info("There are no more docs to collect. Exiting...")
@@ -95,7 +98,7 @@ class DRSUtils:
 
         return endpoint
 
-    def _get_summary_from_response(self, response) -> dict:
+    def _get_summary_from_response(self, response) -> None:
         """
         This function takes a request response and returns the summary.
         """
@@ -103,7 +106,7 @@ class DRSUtils:
 
         if not response.ok:
             logger.error(f"Response return with status code {response.status_code}")
-            return {"Error": f"{response.status_code}"}
+            self.summary = {"Error": f"{response.status_code}"}
         try:
             summary = response.json().get("summary")
             if summary is None:
@@ -112,13 +115,13 @@ class DRSUtils:
                 self.summary = summary
         except json.JSONDecodeError:
             logger.error(f"JSON decoding failed for {response}")
-            summary = {"Error": "Invalid JSON response"}
+            self.summary = {"Error": "Invalid JSON response"}
         except ValueError as e:
             logger.error(f"{e} in response: {response}")
-            summary = {"Error": str(e)}
+            self.summary = {"Error": str(e)}
         except requests.exceptions.RequestException as e:
             logger.error(f"Request error: {e}")
-            summary = {"Error": "Request error"}
+            self.summary = {"Error": "Request error"}
 
         # return summary
 
@@ -132,7 +135,6 @@ class DRSUtils:
             self.list_of_docs.extend(documents)
             logger.info(f"# of Documents: {len(self.list_of_docs)}")
             self.documents = documents
-            return documents
         else:
             logging.error(f"Response Status Code: {response.status_code}")
 
@@ -142,7 +144,7 @@ class DRSUtils:
         endpoint = self._get_endpoint()
 
         headers = {
-            "x-api-key": self.drs_api_key,
+            "x-api-key": DRS_API_KEY,
             "USER_AGENT": "curl/7.68.0",
         }
         if self.doc_last_modified == "":
@@ -152,7 +154,7 @@ class DRSUtils:
                 "offset": self.offset,
                 "docLastModifiedDate": self.doc_last_modified,
             }
-        request_url = f"{self.base_url}{endpoint}"
+        request_url = f"{BASE_URL}{endpoint}"
 
         logger.info("Calling API...")
         response = requests.get(request_url, headers=headers, params=payload)
@@ -167,7 +169,7 @@ class DRSUtils:
         offset: int = 0,
         paginate: bool = True,
         doc_last_modified: str = "",
-    ) -> dict:
+    ) -> None:
         """
         This function collects all documents of a specified type.
         See README.md for additional types.
@@ -184,7 +186,6 @@ class DRSUtils:
         logger.info(
             f"****\nget_docs\n\nDocument: {doc_type}\nOffset: {offset}\n\nLast Modified Date Filter: {doc_last_modified}\nPaginate: {paginate}"
         )
-        # logger.info(f"\n{'*'*50}\nget_docs\nDocument Type: {doc_type}\nOffset: {offset}\nPaginate: {paginate}")
 
         self.offset = offset
         self.doc_type = doc_type
@@ -239,6 +240,12 @@ class DRSUtils:
                 )
                 f.write(json_string + "\n")
 
+    def create_dataframe(data: list(dict)) -> pl.DataFrame: 
+        """
+        This function takes a List(Dict) and return a polars dataframe.
+        """
+        df = pl.DataFrame(data) 
+    )
 
 # This part only runs when drs_utils.py is executed directly
 if __name__ == "__main__":
@@ -247,7 +254,7 @@ if __name__ == "__main__":
     # Testing code
     drs = DRSUtils()
     # Call some methods of DRSUtils for testing
-    drs.get_docs("AD")
+    drs.get_docs("ead")
     end_time = time.time()
 
     total_time = end_time - start_time
