@@ -232,14 +232,15 @@ class DRSUtils:
                 logging.info(f"Setting paginate to False...\nPaginate: {self.paginate}")
 
         logger.info("Saving ADs to a JSON file for future processing...")
-        with open(
-            f"{datetime.now().strftime('%Y%m%d')}_{self.doc_type}_raw_data.json", "w"
-        ) as f:
-            """
-            for record in self.list_of_records(dict) -> pl.DataFrame: 
-        This function takes a List(Dict) and return a polars dataframe.
-        """
-        df = pl.DataFrame(data)
+        # with open(
+        #     f"{datetime.now().strftime('%Y%m%d')}_{self.doc_type}_raw_data.json", "w"
+        # ) as f:
+        #     """
+        #     for record in self.list_of_records(dict) -> pl.DataFrame:
+        # This function takes a List(Dict) and return a polars dataframe.
+        # """
+        # df = pl.DataFrame(data)
+        #
 
 
 # This part only runs when drs_utils.py is executed directly
@@ -249,7 +250,7 @@ if __name__ == "__main__":
     # Testing code
     drs = DRSUtils()
     # Call some methods of DRSUtils for testing
-    drs.get_records("ead")
+    drs.get_records("ad")
     end_time = time.time()
 
     total_time = end_time - start_time
