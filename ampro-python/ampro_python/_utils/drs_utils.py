@@ -42,24 +42,24 @@ class DRSUtils:
         logger.info("Instantiating DRSUtils")
         self.offset = 0
         self.has_more_items = True
-        self.doc_type = "AD"
-        self.list_of_docs = []
+        self.record = "AD"
+        self.list_of_records = []
         self.paginate = True
-        self.documents = {}
+        self.records = {}
         self.summary = {}
 
-    def _paginate_docs(self, docs_summary: dict) -> None:
+    def _paginate_records(self, response_summary: dict) -> None:
         """
         This function checks if there are documents remaining to be collected.
         """
 
-        if docs_summary["hasMoreItems"]:
+        if response_summary["hasMoreItems"]:
             logger.info(
-                f"There are {docs_summary['totalItems']} documents remaining..."
+                f"There are {response_summary['totalItems']} documents remaining..."
             )
-            self.offset = docs_summary["offset"] + docs_summary["count"] + 1
+            self.offset = response_summary["offset"] + response_summary["count"] + 1
         else:
-            logger.info("There are no more docs to collect. Exiting...")
+            logger.info("There are no more records to collect. Exiting...")
             self.paginate = False
 
     def _get_endpoint(self) -> str:
@@ -78,7 +78,7 @@ class DRSUtils:
             "ead": "ADFREAD",
         }
 
-        # Normalize the doc_type to correct for upper or lowercase entries
+        # Normalize the record_type to correct for upper or lowercase entries
         normalized_doc_type = self.doc_type.lower()
 
         # Try to get the mapping if invalid enpoint was entered prompt the user to input a new endpoint and give them valid options
@@ -125,16 +125,16 @@ class DRSUtils:
 
         # return summary
 
-    def _get_documents_from_response(self, response):
+    def _get_records_from_response(self, response):
         """
         This function takes a Response and extracts the documents into list.
         """
-        logging.info("Processing Response to get documents.")
+        logging.info("Processing Response to get records.")
         if response.ok:
-            documents = response.json().get("documents")
-            self.list_of_docs.extend(documents)
-            logger.info(f"# of Documents: {len(self.list_of_docs)}")
-            self.documents = documents
+            records = response.json().get("documents")
+            self.list_of_records.extend(records)
+            logger.info(f"# of Documents: {len(self.list_of_records)}")
+            self.records = records
         else:
             logging.error(f"Response Status Code: {response.status_code}")
 
@@ -163,7 +163,7 @@ class DRSUtils:
         )
         return response
 
-    def get_docs(
+    def get_records(
         self,
         doc_type: str = "AD",
         offset: int = 0,
@@ -184,7 +184,7 @@ class DRSUtils:
 
         """
         logger.info(
-            f"****\nget_docs\n\nDocument: {doc_type}\nOffset: {offset}\n\nLast Modified Date Filter: {doc_last_modified}\nPaginate: {paginate}"
+            f"****\nget_records\n\nDocument: {doc_type}\nOffset: {offset}\n\nLast Modified Date Filter: {doc_last_modified}\nPaginate: {paginate}"
         )
 
         self.offset = offset
@@ -193,11 +193,11 @@ class DRSUtils:
         self.doc_last_modified = doc_last_modified
 
         # logger.info(
-        #     f"Calling `get_docs` with the following params: \ndoc_type: {self.doc_type}\noffset: {self.offset}"
+        #     f"Calling `get_records` with the following params: \ndoc_type: {self.doc_type}\noffset: {self.offset}"
         # )
 
         logger.info(
-            f"\n{'*'*50}\nget_docs\nDocument Type: {doc_type}\nOffset: {offset}\nPaginate: {paginate}"
+            f"\n{'*'*50}\nget_records\nDocument Type: {doc_type}\nOffset: {offset}\nPaginate: {paginate}"
         )
         logger.info("Entering pagination loop...")
         i = 0
@@ -211,8 +211,9 @@ class DRSUtils:
 
             if response.ok:
                 self._get_summary_from_response(response)
-                self._get_documents_from_response(response)
-                logger.info(f"Documents: {self.documents[0]['drs:documentNumber']}")
+                self._get_records_from_response(response)
+                data = self.records[0]["drs:documentNumber"]
+                logger.info(f"Records: {data}")
 
                 logger.info(f"{self.summary['hasMoreItems']}")
                 if not self.summary["hasMoreItems"]:
@@ -234,18 +235,12 @@ class DRSUtils:
         with open(
             f"{datetime.now().strftime('%Y%m%d')}_{self.doc_type}_raw_data.json", "w"
         ) as f:
-            for doc in self.list_of_docs:
-                json_string = json.dumps(
-                    doc, indent=4, separators=(",", ":"), sort_keys=True
-                )
-                f.write(json_string + "\n")
-
-    def create_dataframe(data: list(dict)) -> pl.DataFrame: 
-        """
+            """
+            for record in self.list_of_records(dict) -> pl.DataFrame: 
         This function takes a List(Dict) and return a polars dataframe.
         """
-        df = pl.DataFrame(data) 
-    )
+        df = pl.DataFrame(data)
+
 
 # This part only runs when drs_utils.py is executed directly
 if __name__ == "__main__":
@@ -254,10 +249,10 @@ if __name__ == "__main__":
     # Testing code
     drs = DRSUtils()
     # Call some methods of DRSUtils for testing
-    drs.get_docs("ead")
+    drs.get_records("ead")
     end_time = time.time()
 
     total_time = end_time - start_time
 
     print(f"Total Run Time: {total_time} seconds")
-#    help(drs.get_docs)
+#    help(drs.get_records)
