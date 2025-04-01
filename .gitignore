@@ -38,3 +38,6 @@ venv.bak/
 */target/debug/
 ampro/target/CACHEDIR.TAG
 .rustc_info.json
+uv.lock
+*.json
+.python-version

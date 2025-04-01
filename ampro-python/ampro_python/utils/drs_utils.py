@@ -5,12 +5,11 @@ import json
 import requests
 import logging
 from dotenv import load_dotenv
-import polars as pl
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 # Set the DRS_API_KEY as a variable that in the module rather than putting it in the class since it doesn't ever change.
@@ -37,9 +36,9 @@ else:
 DATE_FORMAT = "%y-%m-%dT%H:%M:%S.%fffZ"
 
 
-class DRSUtils:
+class drs_utils:
     def __init__(self):
-        logger.info("Instantiating DRSUtils")
+        logger.info("Instantiating drs_utils")
         self.offset = 0
         self.has_more_items = True
         self.record = "AD"
@@ -139,7 +138,7 @@ class DRSUtils:
             logging.error(f"Response Status Code: {response.status_code}")
 
     def _call_drs(self):
-        logger.info(f"\n{'*'*50}\n_call_drs")
+        logger.info(f"\n{'*' * 50}\n_call_drs")
 
         endpoint = self._get_endpoint()
 
@@ -165,11 +164,11 @@ class DRSUtils:
 
     def get_records(
         self,
-        doc_type: str = "AD",
+        doc_type: str = "ad",
         offset: int = 0,
         paginate: bool = True,
         doc_last_modified: str = "",
-    ) -> None:
+    ):
         """
         This function collects all documents of a specified type.
         See README.md for additional types.
@@ -197,7 +196,7 @@ class DRSUtils:
         # )
 
         logger.info(
-            f"\n{'*'*50}\nget_records\nDocument Type: {doc_type}\nOffset: {offset}\nPaginate: {paginate}"
+            f"\n{'*' * 50}\nget_records\nDocument Type: {doc_type}\nOffset: {offset}\nPaginate: {paginate}"
         )
         logger.info("Entering pagination loop...")
         i = 0
@@ -208,12 +207,25 @@ class DRSUtils:
             self.paginate = paginate
 
             response = self._call_drs()
+            logger.info(response)
 
             if response.ok:
+                logger.info("Respoonse received...")
                 self._get_summary_from_response(response)
+                logger.info("Summary from response...")
                 self._get_records_from_response(response)
-                data = self.records[0]["drs:documentNumber"]
-                logger.info(f"Records: {data}")
+                logger.info("Records from response...")
+                data = self.records
+
+                # data = self.records[0]["drs:documentNumber"]
+                # logger.info(f"Records: {data}")
+
+                with open(
+                    f"{datetime.now().strftime('%Y%m%d')}_{self.doc_type}_raw_data.json",
+                    "a",
+                ) as f:
+                    f.write(json.dumps(data) + "\n")
+                # return data
 
                 logger.info(f"{self.summary['hasMoreItems']}")
                 if not self.summary["hasMoreItems"]:
@@ -226,21 +238,22 @@ class DRSUtils:
                     logger.info(f"New offset: {self.offset}")
 
                     i += 1
-            else:
-                logging.error(f"Response Status Code: {response.status_code}")
-                self.paginate = False
-                logging.info(f"Setting paginate to False...\nPaginate: {self.paginate}")
+        else:
+            logging.error(f"Response Status Code: {response.status_code}")
+            self.paginate = False
+            logging.info(f"Setting paginate to False...\nPaginate: {self.paginate}")
 
-        logger.info("Saving ADs to a JSON file for future processing...")
-        # with open(
-        #     f"{datetime.now().strftime('%Y%m%d')}_{self.doc_type}_raw_data.json", "w"
-        # ) as f:
-        #     """
-        #     for record in self.list_of_records(dict) -> pl.DataFrame:
-        # This function takes a List(Dict) and return a polars dataframe.
-        # """
-        # df = pl.DataFrame(data)
-        #
+    logger.info("Saving ADs to a JSON file for future processing...")
+
+    # with open(
+    #     f"{datetime.now().strftime('%Y%m%d')}_{self.doc_type}_raw_data.json", "w"
+    # ) as f:
+    #     """
+    #     for record in self.list_of_records(dict) -> pl.DataFrame:
+    # This function takes a List(Dict) and return a polars dataframe.
+    # """
+    # df = pl.DataFrame(data)
+    #
 
 
 # This part only runs when drs_utils.py is executed directly
@@ -248,7 +261,7 @@ if __name__ == "__main__":
     logger.info("Calling __main__")
     start_time = time.time()
     # Testing code
-    drs = DRSUtils()
+    drs = drs_utils()
     # Call some methods of DRSUtils for testing
     drs.get_records("ad")
     end_time = time.time()
