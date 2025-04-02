@@ -41,3 +41,5 @@ ampro/target/CACHEDIR.TAG
 uv.lock
 *.json
 .python-version
+tmp_data/
+data/

@@ -1,4 +1,5 @@
 from datetime import datetime
+import polars as pl
 import time
 import os
 import json
@@ -162,6 +163,98 @@ class drs_utils:
         )
         return response
 
+    def _save_to_parquet(self, response, loop_number):
+        """
+        This function saves raw responses to parquet for easier processing later
+        """
+        print(len(response))
+        # data = response
+        columns_to_select = [
+            "drs:documentNumber",
+            "drs:status",
+            "drs:adfrawdDocketNo",
+            "drs:adfrawdMake",
+            "drs:adfrawdModel",
+            "drs:adfrawdProductType",
+            "drs:adfrawdProductSubType",
+            "drs:adfrawdSubject",
+            "drs:adfrawdAffectedAD",
+            "drs:adfrawdSupersededAD",
+            "drs:title",
+            "drs:adfrawdAction",
+            "drs:adfrawdSummary",
+            "drs:adfrawdSupplementaryInfo",
+            "drs:adfrawdRegulatoryText",
+            "drs:partNumber",
+            "drs:subPart",
+            "drs:sectionNumber",
+            "drs:adfrawdCitationPublishDate",
+            "drs:adfrawdIssueDate",
+            "drs:effectiveDate",
+            "drs:ABReference",
+            "drs:ADReference",
+            "drs:CARReference",
+            "drs:EXReference",
+            "drs:SFARReference",
+            "docLastModifiedDate",
+            "documentGuid",
+            "documentURL",
+            "mainDocumentDownloadURL",
+            "mainDocumentFileName",
+            "hasMoreAttachments",
+        ]
+        df = (
+            pl.from_dicts(response, infer_schema_length=100000)
+            .select(columns_to_select)
+            .cast(
+                {
+                    "drs:adfrawdAffectedAD": pl.List(pl.String),
+                    "drs:adfrawdSupersededAD": pl.List(pl.String),
+                }
+            )
+            .fill_null("")
+            .rename(
+                {
+                    "drs:documentNumber": "doc_number",
+                    "drs:status": "status",
+                    "drs:adfrawdDocketNo": "docket_no",
+                    "drs:adfrawdMake": "make",
+                    "drs:adfrawdModel": "model",
+                    "drs:adfrawdProductType": "product_type",
+                    "drs:adfrawdProductSubType": "product_subtype",
+                    "drs:adfrawdSubject": "subject",
+                    "drs:adfrawdAffectedAD": "affected_ad",
+                    "drs:adfrawdSupersededAD": "superseded_ad",
+                    "drs:title": "title",
+                    "drs:adfrawdAction": "action",
+                    "drs:adfrawdSummary": "summary",
+                    "drs:adfrawdSupplementaryInfo": "supplementary_info",
+                    "drs:adfrawdRegulatoryText": "regulatory_text",
+                    "drs:partNumber": "part_no",
+                    "drs:subPart": "subpart",
+                    "drs:sectionNumber": "section_no",
+                    "drs:adfrawdCitationPublishDate": "publish_date",
+                    "drs:adfrawdIssueDate": "issue_date",
+                    "drs:effectiveDate": "effective_date",
+                    "drs:ABReference": "ab_ref",
+                    "drs:ADReference": "ad_ref",
+                    "drs:CARReference": "car_ref",
+                    "drs:EXReference": "ex_ref",
+                    "drs:SFARReference": "sfar_ref",
+                    "docLastModifiedDate": "modified_date",
+                    "documentGuid": "doc_guid",
+                    "documentURL": "doc_url",
+                    "mainDocumentDownloadURL": "doc_download_url",
+                    "mainDocumentFileName": "doc_filename",
+                    "hasMoreAttachments": "has_more_attachments",
+                }
+            )
+        )
+
+        output_file = f"./tmp_data/{datetime.now().strftime('%Y%m%d')}_{loop_number}_{self.doc_type}_raw_data.parquet"
+        # path: pathlib.Path = dirpath / "new_file.parquet"
+        df.write_parquet(output_file)
+
     def get_records(
         self,
         doc_type: str = "ad",
@@ -216,6 +309,8 @@ class drs_utils:
                 self._get_records_from_response(response)
                 logger.info("Records from response...")
                 data = self.records
+
+                self._save_to_parquet(data, i)
 
                 # data = self.records[0]["drs:documentNumber"]
                 # logger.info(f"Records: {data}")
