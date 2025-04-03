@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger(__name__)
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 # Set the DRS_API_KEY as a variable that in the module rather than putting it in the class since it doesn't ever change.
@@ -24,7 +24,8 @@ else:
 
 # Set the BASE_URL from the .env or .config file.
 
-BASE_URL = os.getenv("DRS_BASE_URL")
+# BASE_URL = os.getenv("DRS_BASE_URL")
+BASE_URL = "https://drs.faa.gov/api/drs/data-pull/"
 if BASE_URL is None:
     logger.error(
         "DRS_BASE_URL not found in environment variable. Make sure you have a .env file."
@@ -40,6 +41,7 @@ DATE_FORMAT = "%y-%m-%dT%H:%M:%S.%fffZ"
 class drs_utils:
     def __init__(self):
         logger.info("Instantiating drs_utils")
+        self.session = requests.Session()
         self.offset = 0
         self.has_more_items = True
         self.record = "AD"
@@ -158,8 +160,9 @@ class drs_utils:
 
         logger.info("Calling API...")
         response = requests.get(request_url, headers=headers, params=payload)
+
         logger.info(
-            f"Response URL: {response.url}\nResponse Status: {response.status_code}"
+            f"Response URL: {response.url} Response Status: {response.status_code}"
         )
         return response
 
@@ -168,11 +171,9 @@ class drs_utils:
         This function saves raw responses to parquet for easier processing later
         """
         print(len(response))
-        # data = response
         columns_to_select = [
             "drs:documentNumber",
             "drs:status",
-            "drs:adfrawdDocketNo",
             "drs:adfrawdMake",
             "drs:adfrawdModel",
             "drs:adfrawdProductType",
@@ -185,39 +186,44 @@ class drs_utils:
             "drs:adfrawdSummary",
             "drs:adfrawdSupplementaryInfo",
             "drs:adfrawdRegulatoryText",
-            "drs:partNumber",
-            "drs:subPart",
-            "drs:sectionNumber",
-            "drs:adfrawdCitationPublishDate",
             "drs:adfrawdIssueDate",
             "drs:effectiveDate",
-            "drs:ABReference",
-            "drs:ADReference",
-            "drs:CARReference",
-            "drs:EXReference",
-            "drs:SFARReference",
-            "docLastModifiedDate",
-            "documentGuid",
             "documentURL",
             "mainDocumentDownloadURL",
             "mainDocumentFileName",
             "hasMoreAttachments",
         ]
+        lf_schema = {
+            "doc_number": pl.String,
+            "status": pl.String,
+            "make": pl.List(pl.String),
+            "model": pl.List(pl.String),
+            "product_type": pl.List(pl.String),
+            "product_subtype": pl.List(pl.String),
+            "subject": pl.String,
+            "affected_ad": pl.List(pl.String),
+            "superseded_ad": pl.List(pl.String),
+            "title": pl.String,
+            "action": pl.String,
+            "summary": pl.String,
+            "supplementary_info": pl.String,
+            "regulatory_text": pl.String,
+            "issue_date": pl.String,
+            "effective_date": pl.String,
+            "doc_url": pl.String,
+            "doc_download_url": pl.String,
+            "doc_filename": pl.String,
+            "has_more_attachments": pl.Boolean,
+        }
         df = (
-            pl.from_dicts(response, infer_schema_length=100000)
+            pl.from_dicts(
+                response, infer_schema_length=10000
+            )  # , schema=lf_schema, infer_schema_length=100000)
             .select(columns_to_select)
-            .cast(
-                {
-                    "drs:adfrawdAffectedAD": pl.List(pl.String),
-                    "drs:adfrawdSupersededAD": pl.List(pl.String),
-                }
-            )
-            .fill_null("")
             .rename(
                 {
                     "drs:documentNumber": "doc_number",
                     "drs:status": "status",
-                    "drs:adfrawdDocketNo": "docket_no",
                     "drs:adfrawdMake": "make",
                     "drs:adfrawdModel": "model",
                     "drs:adfrawdProductType": "product_type",
@@ -230,29 +236,27 @@ class drs_utils:
                     "drs:adfrawdSummary": "summary",
                     "drs:adfrawdSupplementaryInfo": "supplementary_info",
                     "drs:adfrawdRegulatoryText": "regulatory_text",
-                    "drs:partNumber": "part_no",
-                    "drs:subPart": "subpart",
-                    "drs:sectionNumber": "section_no",
-                    "drs:adfrawdCitationPublishDate": "publish_date",
                     "drs:adfrawdIssueDate": "issue_date",
                     "drs:effectiveDate": "effective_date",
-                    "drs:ABReference": "ab_ref",
-                    "drs:ADReference": "ad_ref",
-                    "drs:CARReference": "car_ref",
-                    "drs:EXReference": "ex_ref",
-                    "drs:SFARReference": "sfar_ref",
-                    "docLastModifiedDate": "modified_date",
-                    "documentGuid": "doc_guid",
                     "documentURL": "doc_url",
                     "mainDocumentDownloadURL": "doc_download_url",
                     "mainDocumentFileName": "doc_filename",
                     "hasMoreAttachments": "has_more_attachments",
                 }
             )
+            .with_columns(
+                [
+                    pl.col("affected_ad").cast(pl.List(pl.Utf8)),
+                    pl.col("superseded_ad").cast(pl.List(pl.Utf8)),
+                    pl.col("issue_date").cast(pl.Utf8),
+                    pl.col("summary").cast(pl.Utf8),
+                    pl.col("supplementary_info").cast(pl.Utf8),
+                ]
+            )
         )
 
         output_file = f"./tmp_data/{datetime.now().strftime('%Y%m%d')}_{loop_number}_{self.doc_type}_raw_data.parquet"
-        # path: pathlib.Path = dirpath / "new_file.parquet"
+
         df.write_parquet(output_file)
 
     def get_records(
@@ -283,11 +287,6 @@ class drs_utils:
         self.doc_type = doc_type
         self.paginate = paginate
         self.doc_last_modified = doc_last_modified
-
-        # logger.info(
-        #     f"Calling `get_records` with the following params: \ndoc_type: {self.doc_type}\noffset: {self.offset}"
-        # )
-
         logger.info(
             f"\n{'*' * 50}\nget_records\nDocument Type: {doc_type}\nOffset: {offset}\nPaginate: {paginate}"
         )
@@ -298,10 +297,14 @@ class drs_utils:
         while self.paginate is True:
             logger.info(f"Pagination Loop #{i}")
             self.paginate = paginate
-
-            response = self._call_drs()
-            logger.info(response)
-
+            try:
+                response = self._call_drs()
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                logger.error(
+                    f"Request failed for {self.doc_type} with {offset} with error: {e}"
+                )
+                raise
             if response.ok:
                 logger.info("Respoonse received...")
                 self._get_summary_from_response(response)
@@ -311,17 +314,13 @@ class drs_utils:
                 data = self.records
 
                 self._save_to_parquet(data, i)
-
-                # data = self.records[0]["drs:documentNumber"]
-                # logger.info(f"Records: {data}")
-
-                with open(
-                    f"{datetime.now().strftime('%Y%m%d')}_{self.doc_type}_raw_data.json",
-                    "a",
-                ) as f:
-                    f.write(json.dumps(data) + "\n")
-                # return data
-
+                # with open(
+                #     f"{datetime.now().strftime('%Y%m%d')}_{self.doc_type}_raw_data.json",
+                #     "a",
+                # ) as f:
+                #     f.write(json.dumps(data) + "\n")
+                # # return data
+                #
                 logger.info(f"{self.summary['hasMoreItems']}")
                 if not self.summary["hasMoreItems"]:
                     self.paginate = False
@@ -337,18 +336,6 @@ class drs_utils:
             logging.error(f"Response Status Code: {response.status_code}")
             self.paginate = False
             logging.info(f"Setting paginate to False...\nPaginate: {self.paginate}")
-
-    logger.info("Saving ADs to a JSON file for future processing...")
-
-    # with open(
-    #     f"{datetime.now().strftime('%Y%m%d')}_{self.doc_type}_raw_data.json", "w"
-    # ) as f:
-    #     """
-    #     for record in self.list_of_records(dict) -> pl.DataFrame:
-    # This function takes a List(Dict) and return a polars dataframe.
-    # """
-    # df = pl.DataFrame(data)
-    #
 
 
 # This part only runs when drs_utils.py is executed directly
